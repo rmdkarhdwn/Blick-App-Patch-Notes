@@ -1,134 +1,101 @@
-<script>
-	import { resolve } from '$app/paths';
+<script lang="ts">
 	import { posts } from '$lib/data/posts';
+	import AuthBar from '$lib/components/AuthBar.svelte';
+	import HeroPanel from '$lib/components/HeroPanel.svelte';
+	import LoginModal from '$lib/components/LoginModal.svelte';
+	import PatchCard from '$lib/components/PatchCard.svelte';
+
+	let showLoginModal = $state(false);
+	let isLoggedIn = $state(false);
+	let loginId = $state('');
+	let loginPassword = $state('');
+	let userName = $state('');
+	let loginError = $state('');
+
+	const TEMP_LOGIN = {
+		id: 'admin',
+		password: '1234',
+		name: '관리자'
+	};
+
+	function handleAuthButtonClick() {
+		if (isLoggedIn) {
+			isLoggedIn = false;
+			userName = '';
+			return;
+		}
+
+		loginError = '';
+		showLoginModal = true;
+	}
+
+	function closeLoginModal() {
+		showLoginModal = false;
+		loginId = '';
+		loginPassword = '';
+		loginError = '';
+	}
+
+	function handleLoginSubmit(event: SubmitEvent) {
+		event.preventDefault();
+
+		if (loginId === TEMP_LOGIN.id && loginPassword === TEMP_LOGIN.password) {
+			isLoggedIn = true;
+			userName = TEMP_LOGIN.name;
+			closeLoginModal();
+			return;
+		}
+
+		loginError = '아이디 또는 비밀번호가 올바르지 않습니다.';
+	}
 </script>
 
 <main class="wrap">
-	<header class="top-bar">
-		<button class="admin-btn">로그인</button>
-	</header>
-	<section class="hero-frame">
-		<header class="hero-nav">
-			<span>Blick</span>
-		</header>
-		<div class="hero-body">
-			<p class="hero-title">패치노트</p>
-		</div>
-	</section>
+	<AuthBar {isLoggedIn} {userName} onAuthClick={handleAuthButtonClick} />
+	<HeroPanel />
 
 	<section class="list">
 		<ul class="grid">
 			{#each posts as post (post.id)}
-				<li class="card">
-					<a href={resolve('/post/[id]', { id: post.id })}>
-						<div class="thumb-wrap">
-							<img class="thumb" src={post.image} alt={post.title} loading="lazy" />
-							<div class="corner"></div>
-						</div>
-						<p class="meta">
-							<span>{post.category}</span>
-							<span>|</span>
-							<span>{post.date}</span>
-						</p>
-						<h2>{post.title}</h2>
-						<p class="summary">{post.summary}</p>
-					</a>
-				</li>
+				<PatchCard {post} />
 			{/each}
 		</ul>
 	</section>
 </main>
 
+{#if showLoginModal}
+	<LoginModal
+		bind:loginId
+		bind:loginPassword
+		{loginError}
+		onClose={closeLoginModal}
+		onSubmit={handleLoginSubmit}
+	/>
+{/if}
+
 <style>
+	/* Global Surface: 페이지 전체 기본 배경/폰트 */
 	:global(body) {
 		margin: 0;
-		background: radial-gradient(circle at 14% 12%, #f7f7f7 0 90px, transparent 91px), #ececec;
+		background: #ececec;
 		color: #0e1117;
 		font-family: 'Space Grotesk', 'SUIT Variable', 'Noto Sans KR', sans-serif;
 	}
-	.top-bar {
-		display: flex;
-		justify-content: flex-end;
-		align-items: center;
-	}
-	.admin-btn {
-		margin: 0px 20px 20px 20px;
-		padding: 10px 18px; /* 버튼 크기 */
-		font-size: 14px; /* 글씨 크기 */
-		font-weight: 600;
-		background-color: #ffffff;
-		color: #111;
-		border: 2px solid #111; /* 테두리 */
-		border-radius: 8px;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-	.admin-btn:hover {
-		background-color: #5366fb;
-		color: #fff;
-		border: 2px solid #5366fb;
-	}
 
+	/* Page Container: 전체 레이아웃 너비/패딩 */
 	.wrap {
 		max-width: 1440px;
 		margin: 0 auto;
 		padding: 42px 44px 80px;
 	}
 
-	.hero-frame {
-		border: 5px solid #16181d;
-		border-radius: 26px;
-		background: #f5f5f5;
-		padding: 18px 24px 28px;
-		box-shadow: 0 16px 30px #00000014;
-		transition:
-			transform 0.2s ease,
-			box-shadow 0.2s ease,
-			border-color 0.2s ease;
-	}
-
-	.hero-nav {
-		display: flex;
-		justify-content: space-between;
-		font-size: 12px;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-	}
-
-	.hero-body {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		align-items: end;
-		gap: 18px;
-		margin-top: 16px;
-	}
-
-	.hero-title {
-		margin: 0 0 16px;
-		font-size: clamp(72px, 10vw, 128px);
-		font-weight: 800;
-		letter-spacing: -0.05em;
-		line-height: 0.9;
-		white-space: nowrap;
-		transition: color 0.2s ease;
-	}
-
-	.hero-frame:hover {
-		transform: translateY(-4px);
-		box-shadow: 0 22px 36px #0000001f;
-		border-color: #5366fb;
-	}
-
-	.hero-frame:hover .hero-title {
-		color: #5366fb;
-	}
-
+	/* Card List Section: 히어로와 카드 목록 간격 */
 	.list {
 		margin-top: 46px;
 	}
 
+	/* Grid Layout: 카드 3열 배치 */
 	.grid {
-		list-style: none;
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 40px 30px;
@@ -136,76 +103,8 @@
 		margin: 0;
 	}
 
-	a {
-		display: block;
-		color: #1d2432;
-		text-decoration: none;
-	}
-
-	.thumb-wrap {
-		position: relative;
-		overflow: hidden;
-		border-radius: 12px;
-		border: 2px solid #16181d;
-		background: #d0d0d0;
-	}
-
-	.thumb {
-		display: block;
-		width: 100%;
-		height: 220px;
-		object-fit: cover;
-		filter: grayscale(100%);
-		transition: transform 200ms ease;
-	}
-
-	.corner {
-		position: absolute;
-		right: 0;
-		bottom: 0;
-		width: 52px;
-		height: 42px;
-		background: #ff4a30;
-	}
-
-	.card:hover .thumb {
-		transform: scale(1.03);
-	}
-
-	.meta {
-		margin: 14px 0 8px;
-		font-size: 13px;
-		font-weight: 700;
-		color: #727272;
-		display: flex;
-		gap: 8px;
-		letter-spacing: 0.03em;
-	}
-
-	h2 {
-		margin: 0;
-		font-size: clamp(26px, 2vw, 34px);
-		line-height: 1.1;
-		letter-spacing: -0.03em;
-		color: #111827;
-	}
-
-	.summary {
-		margin: 10px 0 0;
-		font-size: 17px;
-		line-height: 1.5;
-		color: #2a2e36;
-	}
-
+	/* Breakpoint (Tablet): 2열 배치 */
 	@media (max-width: 1100px) {
-		.hero-body {
-			grid-template-columns: 1fr;
-		}
-
-		.hero-title {
-			margin-bottom: 0;
-		}
-
 		.wrap {
 			padding: 28px 20px 56px;
 		}
@@ -215,6 +114,7 @@
 		}
 	}
 
+	/* Breakpoint (Mobile): 1열 배치 */
 	@media (max-width: 720px) {
 		.grid {
 			grid-template-columns: 1fr;
