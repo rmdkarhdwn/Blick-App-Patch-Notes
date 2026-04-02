@@ -1,7 +1,9 @@
 <section class="hero-frame">
+	<!-- 상단 작은 브랜드 텍스트 -->
 	<header class="hero-nav">
 		<span class="hero-nav-text">Blick</span>
 	</header>
+	<!-- 메인 타이틀 -->
 	<div class="hero-body">
 		<p class="hero-title">패치노트</p>
 	</div>

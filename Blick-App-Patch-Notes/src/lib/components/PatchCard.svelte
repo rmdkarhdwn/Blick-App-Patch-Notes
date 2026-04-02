@@ -2,14 +2,28 @@
 	import { resolve } from '$app/paths';
 	import type { Post } from '$lib/data/posts';
 
+	// 부모에서 받는 데이터/옵션
 	type Props = {
 		post: Post;
+		isAdmin?: boolean;
+		onDelete?: (id: string) => void;
 	};
 
-	let { post }: Props = $props();
+	// 카드 1개에 필요한 props 받기
+	let { post, isAdmin = false, onDelete }: Props = $props();
+
+	// 삭제 버튼 클릭 시 카드 링크 이동을 막고 부모에 삭제 요청 전달
+	function handleDeleteClick(event: MouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		onDelete?.(post.id);
+	}
 </script>
 
 <li class="card">
+	{#if isAdmin}
+		<button class="delete-btn" type="button" onclick={handleDeleteClick}>삭제</button>
+	{/if}
 	<a href={resolve('/post/[id]', { id: post.id })}>
 		<div class="thumb-wrap">
 			<img class="thumb" src={post.image} alt={post.title} loading="lazy" />
@@ -29,6 +43,7 @@
 	/* Card Container: 카드 단위 여백/구조 */
 	.card {
 		list-style: none;
+		position: relative;
 	}
 
 	/* Card Link: 카드 전체 클릭 영역 */
@@ -36,6 +51,29 @@
 		display: block;
 		color: #1d2432;
 		text-decoration: none;
+	}
+
+	/* Delete Button: 관리자 전용 카드 삭제 */
+	.delete-btn {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		z-index: 2;
+		height: 32px;
+		padding: 0 10px;
+		border: 1px solid #dc2626;
+		border-radius: 999px;
+		background: #ffffffd9;
+		color: #b91c1c;
+		font-size: 12px;
+		font-weight: 700;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.delete-btn:hover {
+		background: #dc2626;
+		color: #ffffff;
 	}
 
 	/* Thumbnail Frame: 이미지 테두리/모서리 */
@@ -55,7 +93,9 @@
 		height: 220px;
 		object-fit: cover;
 		filter: grayscale(100%);
-		transition: transform 200ms ease;
+		transition:
+			transform 200ms ease,
+			filter 200ms ease;
 	}
 
 	/* Accent Block: 카드 우하단 포인트 컬러 */
@@ -106,6 +146,7 @@
 
 	.card:hover .thumb {
 		transform: scale(1.03);
+		filter: grayscale(0%);
 	}
 
 	.card:hover .meta,

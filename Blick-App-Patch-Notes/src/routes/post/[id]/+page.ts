@@ -1,13 +1,32 @@
 import { error } from '@sveltejs/kit';
-import { posts } from '$lib/data/posts';
+import { isSupabaseConfigured, supabase } from '$lib/supabaseClient';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = ({ params }) => {
-	const post = posts.find((p) => p.id === params.id);
+// 상세 페이지는 DB에서 id로 게시글 1개를 조회한다.
+export const load: PageLoad = async ({ params }) => {
+	if (!isSupabaseConfigured) {
+		throw error(500, 'Supabase 설정이 필요합니다.');
+	}
 
-	if (!post) {
+	const { data, error: dbError } = await supabase
+		.from('posts')
+		.select('id, title, summary, created_at')
+		.eq('id', Number(params.id))
+		.single();
+
+	if (dbError || !data) {
 		throw error(404, '존재하지 않는 패치노트입니다.');
 	}
+
+	const post = {
+		id: String(data.id),
+		category: 'PATCH',
+		date: data.created_at ? new Date(data.created_at).toLocaleDateString('ko-KR') : '',
+		title: data.title,
+		summary: data.summary,
+		content: data.summary,
+		image: 'https://picsum.photos/1200/675?blur=1'
+	};
 
 	return { post };
 };

@@ -1,58 +1,52 @@
 <script lang="ts">
 	// 부모(+page.svelte)와 주고받는 값/핸들러 타입
 	type Props = {
-		loginId: string;
-		loginPassword: string;
-		loginError: string;
+		title: string;
+		summary: string;
+		errorMessage: string;
 		onClose: () => void;
 		onSubmit: (event: SubmitEvent) => void;
 	};
 
-	// $bindable(): 부모 상태와 양방향으로 연결되는 입력값
-	// $props(): 부모가 전달한 값/함수 받기
+	// 입력 필드는 부모 상태와 동기화되도록 $bindable 사용
 	let {
-		loginId = $bindable(''),
-		loginPassword = $bindable(''),
-		loginError,
+		title = $bindable(''),
+		summary = $bindable(''),
+		errorMessage,
 		onClose,
 		onSubmit
 	}: Props = $props();
 </script>
 
 <div class="modal-backdrop">
-	<!-- 모달 본문 -->
-	<div class="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
-		<h3 id="login-title">임시 로그인</h3>
+	<!-- 패치노트 추가 모달 -->
+	<div class="add-modal" role="dialog" aria-modal="true" aria-labelledby="add-patch-title">
+		<h3 id="add-patch-title">패치노트 추가</h3>
 		<!-- submit 시 부모에서 넘긴 onSubmit 실행 -->
-		<form class="login-form" onsubmit={onSubmit}>
+		<form class="add-form" onsubmit={onSubmit}>
 			<label>
-				아이디
-				<input bind:value={loginId} placeholder="admin" autocomplete="username" />
+				제목
+				<input bind:value={title} placeholder="예: 26.7 PATCH NOTES" />
 			</label>
 			<label>
-				비밀번호
-				<input
-					type="password"
-					bind:value={loginPassword}
-					placeholder="1234"
-					autocomplete="current-password"
-				/>
+				요약
+				<input bind:value={summary} placeholder="짧은 설명을 입력하세요" />
 			</label>
 
-			{#if loginError}
-				<p class="login-error">{loginError}</p>
+			{#if errorMessage}
+				<p class="form-error">{errorMessage}</p>
 			{/if}
 
 			<div class="modal-actions">
 				<button type="button" class="ghost-btn" onclick={onClose}>취소</button>
-				<button type="submit" class="submit-btn">로그인</button>
+				<button type="submit" class="submit-btn">추가하기</button>
 			</div>
 		</form>
 	</div>
 </div>
 
 <style>
-	/* Backdrop: 모달 배경 오버레이 */
+	/* Overlay: 추가 모달 배경 */
 	.modal-backdrop {
 		position: fixed;
 		inset: 0;
@@ -63,9 +57,9 @@
 		z-index: 20;
 	}
 
-	/* Modal Container: 로그인 폼 박스 */
-	.login-modal {
-		width: min(420px, 100%);
+	/* Dialog: 추가 폼 컨테이너 */
+	.add-modal {
+		width: min(520px, 100%);
 		background: #ffffff;
 		border: 2px solid #16181d;
 		border-radius: 14px;
@@ -73,41 +67,41 @@
 		box-shadow: 0 18px 34px #0000002e;
 	}
 
-	/* Modal Title */
-	.login-modal h3 {
+	/* Title */
+	h3 {
 		margin: 0 0 14px;
 		font-size: 22px;
 	}
 
 	/* Form Layout */
-	.login-form {
+	.add-form {
 		display: grid;
 		gap: 12px;
 	}
 
-	.login-form label {
+	label {
 		display: grid;
 		gap: 6px;
 		font-size: 14px;
 		font-weight: 600;
 	}
 
-	.login-form input {
-		height: 40px;
+	input {
 		border: 1px solid #9ca3af;
 		border-radius: 8px;
-		padding: 0 12px;
+		padding: 10px 12px;
 		font-size: 14px;
+		font-family: inherit;
 	}
 
-	/* Error Message */
-	.login-error {
+	/* Error */
+	.form-error {
 		margin: 0;
 		font-size: 13px;
 		color: #dc2626;
 	}
 
-	/* Action Buttons */
+	/* Actions */
 	.modal-actions {
 		display: flex;
 		justify-content: flex-end;
