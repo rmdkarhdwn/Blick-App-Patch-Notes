@@ -26,7 +26,8 @@
 	let showLoginModal = $state(false);
 	let showAddModal = $state(false);
 	let isLoggedIn = $state(false);
-	let loginId = $state('');
+	let isAdmin = $state(false);
+	let loginEmail = $state('');
 	let loginPassword = $state('');
 	let userName = $state('');
 	let loginError = $state('');
@@ -34,13 +35,26 @@
 	let addSummary = $state('');
 	let addError = $state('');
 
-	const TEMP_LOGIN = {
-		id: 'admin',
-		password: '1234',
-		name: '관리자'
-	};
-	// 파생 상태($derived): 로그인 + 관리자 이름일 때만 true
-	let isAdmin = $derived(isLoggedIn && userName === TEMP_LOGIN.name);
+	// 선택값: .env에 VITE_ADMIN_EMAIL을 넣으면 해당 이메일만 관리자 권한 부여
+	// 비워두면(기본값) 로그인한 사용자 모두 관리자 기능 사용 가능
+	const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').toLowerCase();
+
+	// Supabase session을 화면 상태로 반영
+	function applyAuthSession(
+		session: { user?: { email?: string; user_metadata?: { name?: string } } } | null
+	) {
+		const email = session?.user?.email ?? '';
+		const displayName = session?.user?.user_metadata?.name || email || '';
+
+		isLoggedIn = Boolean(session?.user);
+		userName = displayName;
+		isAdmin = Boolean(session?.user && (ADMIN_EMAIL ? email.toLowerCase() === ADMIN_EMAIL : true));
+
+		// 로그아웃 상태로 바뀌면 관리자 전용 UI를 닫아준다.
+		if (!isLoggedIn) {
+			closeAddModal();
+		}
+	}
 
 	// DB row를 화면 표시용 형태로 변환
 	function mapRowToUiPost(row: {
@@ -92,15 +106,35 @@
 		isLoadingPosts = false;
 	}
 
-	// 첫 렌더링 시 게시글 목록 로드
-	onMount(fetchPosts);
+	// 첫 렌더링 시:
+	// 1) 현재 세션 복원
+	// 2) auth 상태 변화 감지
+	// 3) 게시글 목록 조회
+	onMount(() => {
+		if (isSupabaseConfigured) {
+			supabase.auth.getSession().then(({ data }) => {
+				applyAuthSession(data.session);
+			});
+		}
+
+		const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+			applyAuthSession(session);
+		});
+
+		fetchPosts();
+
+		return () => {
+			authListener.subscription.unsubscribe();
+		};
+	});
 
 	// 로그인 버튼 클릭: 로그인/로그아웃 토글
-	function handleAuthButtonClick() {
+	async function handleAuthButtonClick() {
 		if (isLoggedIn) {
-			isLoggedIn = false;
-			userName = '';
-			closeAddModal();
+			const { error } = await supabase.auth.signOut();
+			if (error) {
+				loadError = `로그아웃 실패: ${error.message}`;
+			}
 			return;
 		}
 
@@ -111,7 +145,7 @@
 	// 로그인 모달 닫기 + 입력값 초기화
 	function closeLoginModal() {
 		showLoginModal = false;
-		loginId = '';
+		loginEmail = '';
 		loginPassword = '';
 		loginError = '';
 	}
@@ -185,18 +219,33 @@
 		await fetchPosts();
 	}
 
-	// 로그인 모달 제출: 임시 계정 검증
-	function handleLoginSubmit(event: SubmitEvent) {
+	// 로그인 모달 제출: Supabase Auth 이메일/비밀번호 로그인
+	async function handleLoginSubmit(event: SubmitEvent) {
 		event.preventDefault();
 
-		if (loginId === TEMP_LOGIN.id && loginPassword === TEMP_LOGIN.password) {
-			isLoggedIn = true;
-			userName = TEMP_LOGIN.name;
-			closeLoginModal();
+		if (!isSupabaseConfigured) {
+			loginError = 'Supabase 설정이 필요합니다.';
 			return;
 		}
 
-		loginError = '아이디 또는 비밀번호가 올바르지 않습니다.';
+		const email = loginEmail.trim();
+		if (!email || !loginPassword.trim()) {
+			loginError = '이메일과 비밀번호를 입력하세요.';
+			return;
+		}
+
+		const { data, error } = await supabase.auth.signInWithPassword({
+			email,
+			password: loginPassword
+		});
+
+		if (error) {
+			loginError = `로그인 실패: ${error.message}`;
+			return;
+		}
+
+		applyAuthSession(data.session);
+		closeLoginModal();
 	}
 </script>
 
@@ -234,7 +283,7 @@
 <!-- 로그인 모달 -->
 {#if showLoginModal}
 	<LoginModal
-		bind:loginId
+		bind:loginEmail
 		bind:loginPassword
 		{loginError}
 		onClose={closeLoginModal}

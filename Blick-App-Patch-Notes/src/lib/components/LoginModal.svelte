@@ -1,7 +1,7 @@
 <script lang="ts">
 	// 부모(+page.svelte)와 주고받는 값/핸들러 타입
 	type Props = {
-		loginId: string;
+		loginEmail: string;
 		loginPassword: string;
 		loginError: string;
 		onClose: () => void;
@@ -11,7 +11,7 @@
 	// $bindable(): 부모 상태와 양방향으로 연결되는 입력값
 	// $props(): 부모가 전달한 값/함수 받기
 	let {
-		loginId = $bindable(''),
+		loginEmail = $bindable(''),
 		loginPassword = $bindable(''),
 		loginError,
 		onClose,
@@ -22,12 +22,17 @@
 <div class="modal-backdrop">
 	<!-- 모달 본문 -->
 	<div class="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
-		<h3 id="login-title">임시 로그인</h3>
+		<h3 id="login-title">로그인</h3>
 		<!-- submit 시 부모에서 넘긴 onSubmit 실행 -->
 		<form class="login-form" onsubmit={onSubmit}>
 			<label>
-				아이디
-				<input bind:value={loginId} placeholder="admin" autocomplete="username" />
+				이메일
+				<input
+					type="email"
+					bind:value={loginEmail}
+					placeholder="you@example.com"
+					autocomplete="username"
+				/>
 			</label>
 			<label>
 				비밀번호
