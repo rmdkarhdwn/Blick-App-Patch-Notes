@@ -152,17 +152,19 @@
 			currentBoard = parseBoardParam(new URL(window.location.href).searchParams.get('board'));
 		}
 
-		if (isSupabaseConfigured) {
-			supabase.auth.getSession().then(({ data }) => {
-				applyAuthSession(data.session);
-			});
-		}
+		fetchPosts();
+
+		// Supabase 환경변수가 없으면 auth listener를 붙이지 않는다.
+		// (배포 환경에서 키 누락 시 런타임 오류로 클릭 이벤트 전체가 죽는 현상 방지)
+		if (!isSupabaseConfigured) return;
+
+		supabase.auth.getSession().then(({ data }) => {
+			applyAuthSession(data.session);
+		});
 
 		const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
 			applyAuthSession(session);
 		});
-
-		fetchPosts();
 
 		return () => {
 			authListener.subscription.unsubscribe();
@@ -179,6 +181,11 @@
 
 	// 로그인 버튼 클릭: 로그인/로그아웃 토글
 	async function handleAuthButtonClick() {
+		if (!isSupabaseConfigured) {
+			loadError = 'Supabase URL/KEY가 설정되지 않아 로그인 기능을 사용할 수 없습니다.';
+			return;
+		}
+
 		if (isLoggedIn) {
 			const { error } = await supabase.auth.signOut();
 			if (error) {
