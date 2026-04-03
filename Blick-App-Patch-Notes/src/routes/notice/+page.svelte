@@ -9,6 +9,7 @@
 		created_at: string | null;
 		updated_at: string | null;
 		board_type: string;
+		image_url?: string | null;
 	};
 
 	let { data }: { data: { initialPosts?: PostRow[] } } = $props();
@@ -16,6 +17,8 @@
 	let posts = $state([] as PostRow[]);
 	let title = $state('');
 	let summary = $state('');
+	let selectedImageFile = $state<File | null>(null);
+	let imagePreviewUrl = $state('');
 	let formError = $state('');
 	let loadError = $state('');
 	let isSubmitting = $state(false);
@@ -28,6 +31,80 @@
 		return value ? new Date(value).toLocaleDateString('ko-KR') : '-';
 	}
 
+	function getUniqueId() {
+		if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+			return crypto.randomUUID();
+		}
+		return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+	}
+
+	function clearSelectedImage() {
+		if (imagePreviewUrl.startsWith('blob:')) {
+			URL.revokeObjectURL(imagePreviewUrl);
+		}
+		selectedImageFile = null;
+		imagePreviewUrl = '';
+	}
+
+	function setSelectedImage(file: File) {
+		if (!file.type.startsWith('image/')) {
+			formError = '이미지 파일만 업로드할 수 있습니다.';
+			return;
+		}
+
+		formError = '';
+		if (imagePreviewUrl.startsWith('blob:')) {
+			URL.revokeObjectURL(imagePreviewUrl);
+		}
+		selectedImageFile = file;
+		imagePreviewUrl = URL.createObjectURL(file);
+	}
+
+	function handleImageFileChange(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		setSelectedImage(file);
+	}
+
+	function handleImagePaste(event: ClipboardEvent) {
+		const items = event.clipboardData?.items;
+		if (!items) return;
+
+		for (const item of items) {
+			if (!item.type.startsWith('image/')) continue;
+			const file = item.getAsFile();
+			if (!file) continue;
+			event.preventDefault();
+			setSelectedImage(file);
+			return;
+		}
+	}
+
+	async function uploadSelectedImage(): Promise<string | null> {
+		if (!selectedImageFile) return null;
+
+		const fileType = selectedImageFile.type || 'image/png';
+		const extByType = fileType.split('/')[1] || 'png';
+		const extByName = selectedImageFile.name.split('.').pop() || extByType;
+		const extension = extByName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+		const filePath = `notice/${Date.now()}-${getUniqueId()}.${extension}`;
+
+		const { error: uploadError } = await supabase.storage
+			.from('post-images')
+			.upload(filePath, selectedImageFile, {
+				contentType: fileType,
+				upsert: false
+			});
+
+		if (uploadError) {
+			throw new Error(uploadError.message);
+		}
+
+		const { data: publicData } = supabase.storage.from('post-images').getPublicUrl(filePath);
+		return publicData.publicUrl;
+	}
+
 	async function fetchNoticePosts() {
 		if (!isSupabaseConfigured) {
 			loadError = 'Supabase 설정이 필요합니다.';
@@ -37,7 +114,7 @@
 
 		const { data: nextPosts, error } = await supabase
 			.from('posts')
-			.select('id, title, summary, created_at, updated_at, board_type')
+			.select('id, title, summary, created_at, updated_at, board_type, image_url')
 			.eq('board_type', 'notice')
 			.order('id', { ascending: false });
 
@@ -66,15 +143,36 @@
 
 		isSubmitting = true;
 
+		let imageUrl: string | null;
+		try {
+			imageUrl = await uploadSelectedImage();
+		} catch (uploadError) {
+			formError = `이미지 업로드 실패: ${uploadError instanceof Error ? uploadError.message : '알 수 없는 오류'}`;
+			isSubmitting = false;
+			return;
+		}
+
 		const { error } = await supabase.from('posts').insert([
 			{
 				title: title.trim(),
 				summary: summary.trim(),
-				board_type: 'notice'
+				board_type: 'notice',
+				image_url: imageUrl
 			}
 		]);
 
 		if (error) {
+			if (error.message.includes('image_url')) {
+				formError =
+					'posts 테이블에 image_url 컬럼을 추가하세요. SQL: alter table posts add column if not exists image_url text;';
+				isSubmitting = false;
+				return;
+			}
+			if (error.message.includes('post-images')) {
+				formError = "Supabase Storage 버킷 'post-images'를 만들고 public 권한을 확인하세요.";
+				isSubmitting = false;
+				return;
+			}
 			formError = `공지 추가 실패: ${error.message}`;
 			isSubmitting = false;
 			return;
@@ -82,6 +180,7 @@
 
 		title = '';
 		summary = '';
+		clearSelectedImage();
 		isSubmitting = false;
 		await fetchNoticePosts();
 	}
@@ -98,6 +197,22 @@
 	<form class="form" onsubmit={handleCreateNotice}>
 		<input bind:value={title} placeholder="공지 제목" />
 		<input bind:value={summary} placeholder="공지 요약" />
+		<div class="image-editor" onpaste={handleImagePaste}>
+			<label class="file-picker">
+				이미지 파일 선택
+				<input type="file" accept="image/*" onchange={handleImageFileChange} />
+			</label>
+			<p class="hint">또는 여기에 이미지 붙여넣기(Ctrl/Cmd + V)</p>
+
+			{#if imagePreviewUrl}
+				<div class="preview-wrap">
+					<img src={imagePreviewUrl} alt="업로드 미리보기" />
+					<button type="button" class="remove-image-btn" onclick={clearSelectedImage}
+						>이미지 제거</button
+					>
+				</div>
+			{/if}
+		</div>
 		<button type="submit" disabled={isSubmitting}>
 			{isSubmitting ? '추가 중...' : '공지 추가'}
 		</button>
@@ -115,6 +230,9 @@
 		{#each posts as post (post.id)}
 			<li>
 				<a href={resolve('/post/[id]', { id: String(post.id) })}>
+					{#if post.image_url}
+						<img class="item-image" src={post.image_url} alt={post.title} />
+					{/if}
 					<strong>{post.title}</strong>
 					<p>{post.summary}</p>
 					<small>{formatDate(post.created_at)}</small>
@@ -174,6 +292,61 @@
 		cursor: pointer;
 	}
 
+	.image-editor {
+		border: 1px dashed #94a3b8;
+		border-radius: 10px;
+		padding: 10px;
+		background: #f8fafc;
+	}
+
+	.file-picker {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 10px;
+		border: 1px solid #cbd5e1;
+		border-radius: 8px;
+		background: #fff;
+		font-size: 14px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.file-picker input {
+		display: none;
+	}
+
+	.hint {
+		margin: 10px 0 0;
+		font-size: 13px;
+		color: #475569;
+	}
+
+	.preview-wrap {
+		margin-top: 10px;
+		display: grid;
+		gap: 8px;
+	}
+
+	.preview-wrap img {
+		width: min(100%, 420px);
+		border-radius: 10px;
+		border: 1px solid #d1d5db;
+	}
+
+	.remove-image-btn {
+		width: fit-content;
+		height: 32px;
+		padding: 0 10px;
+		border-radius: 8px;
+		border: 1px solid #ef4444;
+		background: #fff;
+		color: #b91c1c;
+		font-size: 13px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
 	.error {
 		margin: 8px 0;
 		color: #dc2626;
@@ -199,6 +372,15 @@
 		padding: 12px;
 		color: inherit;
 		text-decoration: none;
+	}
+
+	.item-image {
+		display: block;
+		width: 100%;
+		max-height: 240px;
+		object-fit: cover;
+		border-radius: 8px;
+		margin-bottom: 10px;
 	}
 
 	.list p {

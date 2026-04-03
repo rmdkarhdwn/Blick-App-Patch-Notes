@@ -89,6 +89,7 @@
 		summary: string;
 		created_at: string | null;
 		board_type?: string | null;
+		image_url?: string | null;
 	}): UiPost {
 		const date = row.created_at
 			? new Date(row.created_at).toLocaleDateString('ko-KR')
@@ -103,7 +104,7 @@
 			title: row.title,
 			summary: row.summary,
 			content: row.summary,
-			image: 'https://picsum.photos/1200/675?blur=1'
+			image: row.image_url || 'https://picsum.photos/1200/675?blur=1'
 		};
 	}
 
@@ -121,7 +122,7 @@
 
 		const { data, error } = await supabase
 			.from('posts')
-			.select('id, title, summary, created_at, board_type')
+			.select('id, title, summary, created_at, board_type, image_url')
 			.eq('board_type', currentBoard)
 			.order('id', { ascending: false });
 

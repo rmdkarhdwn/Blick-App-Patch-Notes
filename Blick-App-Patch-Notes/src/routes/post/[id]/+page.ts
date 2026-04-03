@@ -10,7 +10,7 @@ export const load: PageLoad = async ({ params }) => {
 
 	const { data, error: dbError } = await supabase
 		.from('posts')
-		.select('id, title, summary, created_at, board_type')
+		.select('id, title, summary, created_at, board_type, image_url')
 		.eq('id', Number(params.id))
 		.single();
 
@@ -28,7 +28,7 @@ export const load: PageLoad = async ({ params }) => {
 		title: data.title,
 		summary: data.summary,
 		content: data.summary,
-		image: 'https://picsum.photos/1200/675?blur=1'
+		image: data.image_url || 'https://picsum.photos/1200/675?blur=1'
 	};
 
 	return { post };

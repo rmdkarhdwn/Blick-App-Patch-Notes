@@ -100,7 +100,7 @@
 				updated_at: new Date().toISOString()
 			})
 			.eq('id', Number(post.id))
-			.select('id, title, summary, created_at, board_type')
+			.select('id, title, summary, created_at, board_type, image_url')
 			.single();
 
 		if (error || !updated) {
@@ -115,6 +115,7 @@
 			title: updated.title,
 			summary: updated.summary,
 			content: updated.summary,
+			image: updated.image_url || post.image,
 			boardType: updated.board_type === 'notice' ? 'notice' : 'patch',
 			category: updated.board_type === 'notice' ? 'NOTICE' : 'PATCH'
 		};

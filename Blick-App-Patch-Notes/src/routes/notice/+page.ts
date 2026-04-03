@@ -10,7 +10,7 @@ export const load: PageLoad = async () => {
 
 	const { data, error: dbError } = await supabase
 		.from('posts')
-		.select('id, title, summary, created_at, updated_at, board_type')
+		.select('id, title, summary, created_at, updated_at, board_type, image_url')
 		.eq('board_type', 'notice')
 		.order('id', { ascending: false });
 
