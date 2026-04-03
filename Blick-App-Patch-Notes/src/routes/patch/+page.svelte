@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
+	import LoginModal from '$lib/components/LoginModal.svelte';
 	import { isSupabaseConfigured, supabase } from '$lib/supabaseClient';
 
 	type PostRow = {
@@ -22,10 +24,98 @@
 	let formError = $state('');
 	let loadError = $state('');
 	let isSubmitting = $state(false);
+	let isLoggedIn = $state(false);
+	let isAdmin = $state(false);
+	let userName = $state('');
+	let showLoginModal = $state(false);
+	let loginEmail = $state('');
+	let loginPassword = $state('');
+	let loginError = $state('');
+
+	// .env에 VITE_ADMIN_EMAIL이 있으면 해당 이메일만 관리자 권한 부여
+	const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').toLowerCase();
 
 	$effect(() => {
 		posts = data.initialPosts ?? [];
 	});
+
+	function applyAuthSession(
+		session: { user?: { email?: string; user_metadata?: { name?: string } } } | null
+	) {
+		const email = session?.user?.email ?? '';
+		userName = session?.user?.user_metadata?.name || email || '';
+		isLoggedIn = Boolean(session?.user);
+		isAdmin = Boolean(session?.user && (ADMIN_EMAIL ? email.toLowerCase() === ADMIN_EMAIL : true));
+	}
+
+	onMount(() => {
+		if (!isSupabaseConfigured) return;
+
+		supabase.auth.getSession().then(({ data }) => {
+			applyAuthSession(data.session);
+		});
+
+		const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+			applyAuthSession(session);
+		});
+
+		return () => {
+			authListener.subscription.unsubscribe();
+		};
+	});
+
+	async function handleAuthButtonClick() {
+		if (!isSupabaseConfigured) {
+			loadError = 'Supabase URL/KEY가 설정되지 않아 로그인 기능을 사용할 수 없습니다.';
+			return;
+		}
+
+		if (isLoggedIn) {
+			const { error } = await supabase.auth.signOut();
+			if (error) {
+				loadError = `로그아웃 실패: ${error.message}`;
+			}
+			return;
+		}
+
+		loginError = '';
+		showLoginModal = true;
+	}
+
+	function closeLoginModal() {
+		showLoginModal = false;
+		loginEmail = '';
+		loginPassword = '';
+		loginError = '';
+	}
+
+	async function handleLoginSubmit(event: SubmitEvent) {
+		event.preventDefault();
+
+		if (!isSupabaseConfigured) {
+			loginError = 'Supabase 설정이 필요합니다.';
+			return;
+		}
+
+		const email = loginEmail.trim();
+		if (!email || !loginPassword.trim()) {
+			loginError = '이메일과 비밀번호를 입력하세요.';
+			return;
+		}
+
+		const { data, error } = await supabase.auth.signInWithPassword({
+			email,
+			password: loginPassword
+		});
+
+		if (error) {
+			loginError = `로그인 실패: ${error.message}`;
+			return;
+		}
+
+		applyAuthSession(data.session);
+		closeLoginModal();
+	}
 
 	function formatDate(value: string | null) {
 		return value ? new Date(value).toLocaleDateString('ko-KR') : '-';
@@ -131,6 +221,11 @@
 		event.preventDefault();
 		formError = '';
 
+		if (!isAdmin) {
+			formError = '관리자 로그인 후 작성할 수 있습니다.';
+			return;
+		}
+
 		if (!title.trim() || !summary.trim()) {
 			formError = '제목과 요약을 입력하세요.';
 			return;
@@ -194,29 +289,42 @@
 
 	<h1>패치노트</h1>
 
-	<form class="form" onsubmit={handleCreatePatch}>
-		<input bind:value={title} placeholder="패치 제목" />
-		<input bind:value={summary} placeholder="패치 요약" />
-		<div class="image-editor" onpaste={handleImagePaste}>
-			<label class="file-picker">
-				이미지 파일 선택
-				<input type="file" accept="image/*" onchange={handleImageFileChange} />
-			</label>
-			<p class="hint">또는 여기에 이미지 붙여넣기(Ctrl/Cmd + V)</p>
-
-			{#if imagePreviewUrl}
-				<div class="preview-wrap">
-					<img src={imagePreviewUrl} alt="업로드 미리보기" />
-					<button type="button" class="remove-image-btn" onclick={clearSelectedImage}
-						>이미지 제거</button
-					>
-				</div>
-			{/if}
-		</div>
-		<button type="submit" disabled={isSubmitting}>
-			{isSubmitting ? '추가 중...' : '패치노트 추가'}
+	<div class="auth-bar">
+		{#if isLoggedIn}
+			<span class="user-name">{userName}</span>
+		{/if}
+		<button class="auth-btn" type="button" onclick={handleAuthButtonClick}>
+			{isLoggedIn ? '로그아웃' : '관리자 로그인'}
 		</button>
-	</form>
+	</div>
+
+	{#if isAdmin}
+		<form class="form" onsubmit={handleCreatePatch}>
+			<input bind:value={title} placeholder="패치 제목" />
+			<input bind:value={summary} placeholder="패치 요약" />
+			<div class="image-editor" onpaste={handleImagePaste}>
+				<label class="file-picker">
+					이미지 파일 선택
+					<input type="file" accept="image/*" onchange={handleImageFileChange} />
+				</label>
+				<p class="hint">또는 여기에 이미지 붙여넣기(Ctrl/Cmd + V)</p>
+
+				{#if imagePreviewUrl}
+					<div class="preview-wrap">
+						<img src={imagePreviewUrl} alt="업로드 미리보기" />
+						<button type="button" class="remove-image-btn" onclick={clearSelectedImage}
+							>이미지 제거</button
+						>
+					</div>
+				{/if}
+			</div>
+			<button type="submit" disabled={isSubmitting}>
+				{isSubmitting ? '추가 중...' : '패치노트 추가'}
+			</button>
+		</form>
+	{:else}
+		<p class="admin-help">관리자 계정으로 로그인하면 이미지 포함 패치노트를 작성할 수 있습니다.</p>
+	{/if}
 
 	{#if formError}
 		<p class="error">{formError}</p>
@@ -241,6 +349,16 @@
 		{/each}
 	</ul>
 </main>
+
+{#if showLoginModal}
+	<LoginModal
+		bind:loginEmail
+		bind:loginPassword
+		{loginError}
+		onClose={closeLoginModal}
+		onSubmit={handleLoginSubmit}
+	/>
+{/if}
 
 <style>
 	.page {
@@ -267,6 +385,42 @@
 
 	h1 {
 		margin: 0 0 16px;
+	}
+
+	.auth-bar {
+		display: flex;
+		justify-content: flex-end;
+		align-items: center;
+		gap: 10px;
+		margin-bottom: 12px;
+	}
+
+	.user-name {
+		font-size: 13px;
+		font-weight: 700;
+		color: #334155;
+	}
+
+	.auth-btn {
+		height: 36px;
+		padding: 0 12px;
+		border: 1px solid #111827;
+		border-radius: 8px;
+		background: #fff;
+		color: #111827;
+		font-size: 13px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.admin-help {
+		margin: 0 0 12px;
+		padding: 10px 12px;
+		border: 1px solid #bfdbfe;
+		border-radius: 8px;
+		background: #eff6ff;
+		color: #1d4ed8;
+		font-size: 14px;
 	}
 
 	.form {
