@@ -1,3 +1,12 @@
+<script lang="ts">
+	// 부모에서 전달받는 히어로 타이틀(공지/패치노트)
+	type Props = {
+		title?: string;
+	};
+
+	let { title = '패치노트' }: Props = $props();
+</script>
+
 <section class="hero-frame">
 	<!-- 상단 작은 브랜드 텍스트 -->
 	<header class="hero-nav">
@@ -5,7 +14,7 @@
 	</header>
 	<!-- 메인 타이틀 -->
 	<div class="hero-body">
-		<p class="hero-title">패치노트</p>
+		<p class="hero-title">{title}</p>
 	</div>
 </section>
 

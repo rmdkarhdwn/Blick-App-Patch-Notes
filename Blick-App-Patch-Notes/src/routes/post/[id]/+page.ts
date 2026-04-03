@@ -10,7 +10,7 @@ export const load: PageLoad = async ({ params }) => {
 
 	const { data, error: dbError } = await supabase
 		.from('posts')
-		.select('id, title, summary, created_at')
+		.select('id, title, summary, created_at, board_type')
 		.eq('id', Number(params.id))
 		.single();
 
@@ -18,9 +18,12 @@ export const load: PageLoad = async ({ params }) => {
 		throw error(404, '존재하지 않는 패치노트입니다.');
 	}
 
+	const boardType = data.board_type === 'notice' ? 'notice' : 'patch';
+
 	const post = {
 		id: String(data.id),
-		category: 'PATCH',
+		boardType,
+		category: boardType === 'notice' ? 'NOTICE' : 'PATCH',
 		date: data.created_at ? new Date(data.created_at).toLocaleDateString('ko-KR') : '',
 		title: data.title,
 		summary: data.summary,

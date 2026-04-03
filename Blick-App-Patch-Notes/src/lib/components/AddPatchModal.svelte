@@ -3,6 +3,7 @@
 	type Props = {
 		title: string;
 		summary: string;
+		boardLabel?: string;
 		errorMessage: string;
 		onClose: () => void;
 		onSubmit: (event: SubmitEvent) => void;
@@ -12,6 +13,7 @@
 	let {
 		title = $bindable(''),
 		summary = $bindable(''),
+		boardLabel = '패치노트',
 		errorMessage,
 		onClose,
 		onSubmit
@@ -21,12 +23,12 @@
 <div class="modal-backdrop">
 	<!-- 패치노트 추가 모달 -->
 	<div class="add-modal" role="dialog" aria-modal="true" aria-labelledby="add-patch-title">
-		<h3 id="add-patch-title">패치노트 추가</h3>
+		<h3 id="add-patch-title">{boardLabel} 추가</h3>
 		<!-- submit 시 부모에서 넘긴 onSubmit 실행 -->
 		<form class="add-form" onsubmit={onSubmit}>
 			<label>
 				제목
-				<input bind:value={title} placeholder="예: 26.7 PATCH NOTES" />
+				<input bind:value={title} placeholder={`예: ${boardLabel} 제목`} />
 			</label>
 			<label>
 				요약

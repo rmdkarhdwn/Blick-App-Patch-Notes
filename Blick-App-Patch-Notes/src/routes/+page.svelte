@@ -7,9 +7,12 @@
 	import PatchCard from '$lib/components/PatchCard.svelte';
 	import { isSupabaseConfigured, supabase } from '$lib/supabaseClient';
 
+	type BoardType = 'notice' | 'patch';
+
 	// 화면에서 사용할 게시글 형태(프론트 UI용)
 	type UiPost = {
 		id: string;
+		boardType: BoardType;
 		category: string;
 		date: string;
 		title: string;
@@ -22,6 +25,7 @@
 	let postList = $state([] as UiPost[]);
 	let isLoadingPosts = $state(false);
 	let loadError = $state('');
+	let currentBoard = $state('patch' as BoardType);
 
 	let showLoginModal = $state(false);
 	let showAddModal = $state(false);
@@ -34,6 +38,28 @@
 	let addTitle = $state('');
 	let addSummary = $state('');
 	let addError = $state('');
+
+	// 공지/패치 탭 라벨을 한 곳에서 관리
+	function getBoardLabel(board: BoardType) {
+		return board === 'notice' ? '공지' : '패치노트';
+	}
+
+	// URL query(?board=notice|patch)에서 안전하게 게시판 타입 읽기
+	function parseBoardParam(value: string | null): BoardType {
+		return value === 'notice' ? 'notice' : 'patch';
+	}
+
+	// 탭 변경 시 URL도 함께 갱신해서 새로고침해도 같은 탭 유지
+	function syncBoardQuery(board: BoardType) {
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		if (board === 'patch') {
+			url.searchParams.delete('board');
+		} else {
+			url.searchParams.set('board', board);
+		}
+		window.history.replaceState(window.history.state, '', url.toString());
+	}
 
 	// 선택값: .env에 VITE_ADMIN_EMAIL을 넣으면 해당 이메일만 관리자 권한 부여
 	// 비워두면(기본값) 로그인한 사용자 모두 관리자 기능 사용 가능
@@ -62,14 +88,17 @@
 		title: string;
 		summary: string;
 		created_at: string | null;
+		board_type?: string | null;
 	}): UiPost {
 		const date = row.created_at
 			? new Date(row.created_at).toLocaleDateString('ko-KR')
 			: new Date().toLocaleDateString('ko-KR');
+		const boardType = row.board_type === 'notice' ? 'notice' : 'patch';
 
 		return {
 			id: String(row.id),
-			category: 'PATCH',
+			boardType,
+			category: boardType === 'notice' ? 'NOTICE' : 'PATCH',
 			date,
 			title: row.title,
 			summary: row.summary,
@@ -92,10 +121,18 @@
 
 		const { data, error } = await supabase
 			.from('posts')
-			.select('id, title, summary, created_at')
+			.select('id, title, summary, created_at, board_type')
+			.eq('board_type', currentBoard)
 			.order('id', { ascending: false });
 
 		if (error) {
+			if (error.message.includes('board_type')) {
+				loadError =
+					"posts 테이블에 board_type 컬럼이 필요합니다. 예) alter table posts add column board_type text default 'patch';";
+				postList = [];
+				isLoadingPosts = false;
+				return;
+			}
 			loadError = `목록 조회 실패: ${error.message}`;
 			postList = [];
 			isLoadingPosts = false;
@@ -111,6 +148,10 @@
 	// 2) auth 상태 변화 감지
 	// 3) 게시글 목록 조회
 	onMount(() => {
+		if (typeof window !== 'undefined') {
+			currentBoard = parseBoardParam(new URL(window.location.href).searchParams.get('board'));
+		}
+
 		if (isSupabaseConfigured) {
 			supabase.auth.getSession().then(({ data }) => {
 				applyAuthSession(data.session);
@@ -127,6 +168,14 @@
 			authListener.subscription.unsubscribe();
 		};
 	});
+
+	// 중앙 탭 변경(공지/패치노트)
+	function handleBoardChange(board: BoardType) {
+		if (currentBoard === board) return;
+		currentBoard = board;
+		syncBoardQuery(board);
+		fetchPosts();
+	}
 
 	// 로그인 버튼 클릭: 로그인/로그아웃 토글
 	async function handleAuthButtonClick() {
@@ -184,7 +233,8 @@
 		const { error } = await supabase.from('posts').insert([
 			{
 				title: addTitle.trim(),
-				summary: addSummary.trim()
+				summary: addSummary.trim(),
+				board_type: currentBoard
 			}
 		]);
 
@@ -201,7 +251,7 @@
 	async function handleDeletePost(id: string) {
 		if (!isAdmin) return;
 
-		const shouldDelete = confirm('이 패치노트를 삭제할까요?');
+		const shouldDelete = confirm(`이 ${getBoardLabel(currentBoard)}를 삭제할까요?`);
 		if (!shouldDelete) return;
 
 		if (!isSupabaseConfigured) {
@@ -251,9 +301,15 @@
 
 <main class="wrap">
 	<!-- 상단 바: 커피 버튼, 로그인/로그아웃 -->
-	<AuthBar {isLoggedIn} {userName} onAuthClick={handleAuthButtonClick} />
+	<AuthBar
+		{isLoggedIn}
+		{userName}
+		{currentBoard}
+		onBoardChange={handleBoardChange}
+		onAuthClick={handleAuthButtonClick}
+	/>
 	<!-- 페이지 대표 히어로 영역 -->
-	<HeroPanel />
+	<HeroPanel title={getBoardLabel(currentBoard)} />
 
 	<!-- 조회 에러 메시지 -->
 	{#if loadError}
@@ -262,22 +318,33 @@
 
 	<!-- 로딩 상태 -->
 	{#if isLoadingPosts}
-		<p class="load-state">패치노트를 불러오는 중...</p>
+		<p class="load-state">{getBoardLabel(currentBoard)}를 불러오는 중...</p>
 	{/if}
 
 	<!-- 패치노트 카드 목록 -->
 	<section class="list">
-		<ul class="grid">
-			{#each postList as post (post.id)}
-				<PatchCard {post} {isAdmin} onDelete={handleDeletePost} />
-			{/each}
-		</ul>
+		{#if !isLoadingPosts && !loadError && postList.length === 0}
+			<p class="load-empty">등록된 {getBoardLabel(currentBoard)}가 없습니다.</p>
+		{:else}
+			<ul class="grid">
+				{#each postList as post (post.id)}
+					<PatchCard {post} {isAdmin} onDelete={handleDeletePost} />
+				{/each}
+			</ul>
+		{/if}
 	</section>
 </main>
 
 <!-- 관리자일 때만 보이는 하단 + 버튼 -->
 {#if isAdmin}
-	<button class="add-fab" type="button" aria-label="패치노트 추가" onclick={openAddModal}>+</button>
+	<button
+		class="add-fab"
+		type="button"
+		aria-label={`${getBoardLabel(currentBoard)} 추가`}
+		onclick={openAddModal}
+	>
+		+
+	</button>
 {/if}
 
 <!-- 로그인 모달 -->
@@ -296,6 +363,7 @@
 	<AddPatchModal
 		bind:title={addTitle}
 		bind:summary={addSummary}
+		boardLabel={getBoardLabel(currentBoard)}
 		errorMessage={addError}
 		onClose={closeAddModal}
 		onSubmit={handleAddPatchSubmit}
@@ -329,6 +397,13 @@
 	.load-state {
 		margin: 18px 0 0;
 		color: #334155;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.load-empty {
+		margin: 18px 0 0;
+		color: #475569;
 		font-size: 14px;
 		font-weight: 600;
 	}

@@ -9,6 +9,7 @@
 	// 화면에서 수정/표시에 사용할 게시글 상태
 	let post = $state({
 		id: '',
+		boardType: 'patch',
 		category: '',
 		date: '',
 		title: '',
@@ -99,7 +100,7 @@
 				updated_at: new Date().toISOString()
 			})
 			.eq('id', Number(post.id))
-			.select('id, title, summary, created_at')
+			.select('id, title, summary, created_at, board_type')
 			.single();
 
 		if (error || !updated) {
@@ -113,7 +114,9 @@
 			...post,
 			title: updated.title,
 			summary: updated.summary,
-			content: updated.summary
+			content: updated.summary,
+			boardType: updated.board_type === 'notice' ? 'notice' : 'patch',
+			category: updated.board_type === 'notice' ? 'NOTICE' : 'PATCH'
 		};
 		isSaving = false;
 		isEditing = false;
