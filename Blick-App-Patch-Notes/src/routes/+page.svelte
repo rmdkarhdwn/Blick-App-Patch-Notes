@@ -36,7 +36,9 @@
 	let userName = $state('');
 	let loginError = $state('');
 	let addTitle = $state('');
-	let addSummary = $state('');
+	let addContent = $state('');
+	let addImageFile = $state<File | null>(null);
+	let addImagePreviewUrl = $state('');
 	let addError = $state('');
 
 	// 공지/패치 탭 라벨을 한 곳에서 관리
@@ -218,8 +220,83 @@
 	function closeAddModal() {
 		showAddModal = false;
 		addTitle = '';
-		addSummary = '';
+		addContent = '';
+		clearAddImage();
 		addError = '';
+	}
+
+	function getUniqueId() {
+		if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+			return crypto.randomUUID();
+		}
+		return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+	}
+
+	function clearAddImage() {
+		if (addImagePreviewUrl.startsWith('blob:')) {
+			URL.revokeObjectURL(addImagePreviewUrl);
+		}
+		addImageFile = null;
+		addImagePreviewUrl = '';
+	}
+
+	function setAddImage(file: File) {
+		if (!file.type.startsWith('image/')) {
+			addError = '이미지 파일만 업로드할 수 있습니다.';
+			return;
+		}
+
+		addError = '';
+		if (addImagePreviewUrl.startsWith('blob:')) {
+			URL.revokeObjectURL(addImagePreviewUrl);
+		}
+		addImageFile = file;
+		addImagePreviewUrl = URL.createObjectURL(file);
+	}
+
+	function handleAddImageFileChange(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		setAddImage(file);
+	}
+
+	function handleAddImagePaste(event: ClipboardEvent) {
+		const items = event.clipboardData?.items;
+		if (!items) return;
+
+		for (const item of items) {
+			if (!item.type.startsWith('image/')) continue;
+			const file = item.getAsFile();
+			if (!file) continue;
+			event.preventDefault();
+			setAddImage(file);
+			return;
+		}
+	}
+
+	async function uploadAddImage(): Promise<string | null> {
+		if (!addImageFile) return null;
+
+		const fileType = addImageFile.type || 'image/png';
+		const extByType = fileType.split('/')[1] || 'png';
+		const extByName = addImageFile.name.split('.').pop() || extByType;
+		const extension = extByName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+		const filePath = `${currentBoard}/${Date.now()}-${getUniqueId()}.${extension}`;
+
+		const { error: uploadError } = await supabase.storage
+			.from('post-images')
+			.upload(filePath, addImageFile, {
+				contentType: fileType,
+				upsert: false
+			});
+
+		if (uploadError) {
+			throw new Error(uploadError.message);
+		}
+
+		const { data: publicData } = supabase.storage.from('post-images').getPublicUrl(filePath);
+		return publicData.publicUrl;
 	}
 
 	// 추가 모달 제출: Supabase posts 테이블에 insert
@@ -228,8 +305,8 @@
 
 		if (!isAdmin) return;
 
-		if (!addTitle.trim() || !addSummary.trim()) {
-			addError = '제목과 요약은 필수입니다.';
+		if (!addTitle.trim() || !addContent.trim()) {
+			addError = '제목과 내용은 필수입니다.';
 			return;
 		}
 
@@ -238,13 +315,32 @@
 			return;
 		}
 
+		let imageUrl: string | null;
+		try {
+			imageUrl = await uploadAddImage();
+		} catch (uploadError) {
+			addError = `이미지 업로드 실패: ${uploadError instanceof Error ? uploadError.message : '알 수 없는 오류'}`;
+			return;
+		}
+
 		const { error } = await supabase.from('posts').insert([
 			{
 				title: addTitle.trim(),
-				summary: addSummary.trim(),
+				summary: addContent.trim(),
+				image_url: imageUrl,
 				board_type: currentBoard
 			}
 		]);
+
+		if (error?.message?.includes('image_url')) {
+			addError =
+				'posts 테이블에 image_url 컬럼을 추가하세요. SQL: alter table posts add column if not exists image_url text;';
+			return;
+		}
+		if (error?.message?.includes('post-images')) {
+			addError = "Supabase Storage 버킷 'post-images'를 만들고 public 권한을 확인하세요.";
+			return;
+		}
 
 		if (error) {
 			addError = `추가 실패: ${error.message}`;
@@ -370,9 +466,13 @@
 {#if showAddModal}
 	<AddPatchModal
 		bind:title={addTitle}
-		bind:summary={addSummary}
+		bind:content={addContent}
+		imagePreviewUrl={addImagePreviewUrl}
 		boardLabel={getBoardLabel(currentBoard)}
 		errorMessage={addError}
+		onImageFileChange={handleAddImageFileChange}
+		onImagePaste={handleAddImagePaste}
+		onClearImage={clearAddImage}
 		onClose={closeAddModal}
 		onSubmit={handleAddPatchSubmit}
 	/>
