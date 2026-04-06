@@ -232,6 +232,15 @@
 		return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 	}
 
+	function fileToDataUrl(file: File): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(String(reader.result ?? ''));
+			reader.onerror = () => reject(new Error('이미지를 읽는 중 오류가 발생했습니다.'));
+			reader.readAsDataURL(file);
+		});
+	}
+
 	function clearAddImage() {
 		if (addImagePreviewUrl.startsWith('blob:')) {
 			URL.revokeObjectURL(addImagePreviewUrl);
@@ -292,6 +301,11 @@
 			});
 
 		if (uploadError) {
+			const message = uploadError.message.toLowerCase();
+			// Storage 버킷이 없는 환경에서는 Data URL 저장으로 대체해 작성 흐름을 유지한다.
+			if (message.includes('bucket') && message.includes('not found')) {
+				return await fileToDataUrl(addImageFile);
+			}
 			throw new Error(uploadError.message);
 		}
 

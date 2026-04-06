@@ -86,6 +86,8 @@
 	/* Dialog: 추가 폼 컨테이너 */
 	.add-modal {
 		width: min(520px, 100%);
+		max-height: min(88vh, 920px);
+		overflow-y: auto;
 		background: #ffffff;
 		border: 2px solid #16181d;
 		border-radius: 14px;
@@ -168,8 +170,11 @@
 
 	.preview-wrap img {
 		width: min(100%, 420px);
+		max-height: 260px;
+		object-fit: contain;
 		border-radius: 10px;
 		border: 1px solid #d1d5db;
+		background: #fff;
 	}
 
 	.remove-image-btn {
