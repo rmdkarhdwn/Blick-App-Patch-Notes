@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import LoginModal from '$lib/components/LoginModal.svelte';
+	import defaultLogoUrl from '$lib/assets/Logo.png';
 	import { isSupabaseConfigured, supabase } from '$lib/supabaseClient';
 
 	type PostRow = {
@@ -172,7 +173,7 @@
 	}
 
 	async function uploadSelectedImage(): Promise<string | null> {
-		if (!selectedImageFile) return null;
+		if (!selectedImageFile) return defaultLogoUrl;
 
 		const fileType = selectedImageFile.type || 'image/png';
 		const extByType = fileType.split('/')[1] || 'png';
@@ -338,9 +339,7 @@
 		{#each posts as post (post.id)}
 			<li>
 				<a href={resolve('/post/[id]', { id: String(post.id) })}>
-					{#if post.image_url}
-						<img class="item-image" src={post.image_url} alt={post.title} />
-					{/if}
+					<img class="item-image" src={post.image_url || defaultLogoUrl} alt={post.title} />
 					<strong>{post.title}</strong>
 					<p>{post.summary}</p>
 					<small>{formatDate(post.created_at)}</small>

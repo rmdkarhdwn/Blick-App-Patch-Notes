@@ -5,6 +5,7 @@
 	import HeroPanel from '$lib/components/HeroPanel.svelte';
 	import LoginModal from '$lib/components/LoginModal.svelte';
 	import PatchCard from '$lib/components/PatchCard.svelte';
+	import defaultLogoUrl from '$lib/assets/Logo.png';
 	import { isSupabaseConfigured, supabase } from '$lib/supabaseClient';
 
 	type BoardType = 'notice' | 'patch';
@@ -106,7 +107,7 @@
 			title: row.title,
 			summary: row.summary,
 			content: row.summary,
-			image: row.image_url || 'https://picsum.photos/1200/675?blur=1'
+			image: row.image_url || defaultLogoUrl
 		};
 	}
 
@@ -285,7 +286,7 @@
 	}
 
 	async function uploadAddImage(): Promise<string | null> {
-		if (!addImageFile) return null;
+		if (!addImageFile) return defaultLogoUrl;
 
 		const fileType = addImageFile.type || 'image/png';
 		const extByType = fileType.split('/')[1] || 'png';
